@@ -2,35 +2,15 @@
 
 module ApacheLog where
 
-import Control.Concurrent
-import Control.Monad
-import Control.Applicative ((<$),(<$>),(<*),(*>))
+import Control.Applicative ((<$),(<*),(*>))
 import Data.Attoparsec.Char8
 import Data.ByteString (ByteString)
-import qualified Data.ByteString.Char8 as BS
-import qualified Data.ByteString.Lazy.Char8 as BL
 
 data Log = Log {
     logTime :: ByteString -- UTCTime
   , logPath :: ByteString
   , logMethod :: ByteString
   } deriving (Eq,Show)
-
-main :: IO ()
-main = do
-    chan <- newChan
-    forkIO (bslines <$> BL.getContents >>= mapM_ (write chan . apache))
-    forever $ readChan chan >>= print
-  where
-    write _    Nothing = return ()
-    write chan (Just x) = writeChan chan x
-
-bslines :: BL.ByteString -> [ByteString]
-bslines bs = case BL.break (== '\n') bs of
-    (bs',"")   -> toStrict bs' : []
-    (bs',rest) -> toStrict bs' : bslines (BL.tail rest)
-  where
-    toStrict = BS.concat . BL.toChunks
 
 apache :: ByteString -> Maybe Log
 apache bs = case feed (parse apacheLog bs) "" of

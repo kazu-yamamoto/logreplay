@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Log where
+module Report where
 
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.STM
@@ -94,8 +94,8 @@ locate spec = mapM_ move srcdsts
 
 ----------------------------------------------------------------
 
-setoutInit :: IO (TChan ByteString)
-setoutInit = do
+stdoutInit :: IO (TChan ByteString)
+stdoutInit = do
     chan <- newTChanIO
     forkIO $ stdoutSerializer chan
     return chan

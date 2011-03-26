@@ -6,14 +6,19 @@ import ApacheLog
 import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.STM
+import qualified Control.Exception as Exc
 import Control.Monad
+import Control.Monad.IO.Class
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as BL
+import qualified Data.Enumerator.List as EL
+import Data.Enumerator hiding (replicate, filter, map)
 import Data.Maybe
 import Network.HTTP.Enumerator
 import Report
 import System.IO
+import System.IO.Error (isEOFError)
 
 data ATOM = ATOM {
     jobQueue :: TChan (Maybe Log)
@@ -25,8 +30,7 @@ data ATOM = ATOM {
 newAtom :: Int -> FileLogSpec -> IO ATOM
 newAtom n logspec =
     ATOM <$> newTChanIO
---         <*> fileInit logspec
-         <*> stdoutInit
+         <*> fileInit logspec
          <*> newTVarIO 0
          <*> newTVarIO n
 
@@ -65,19 +69,45 @@ getter atom = do
     actv = activeWorkers atom
     done = jobsDone atom
 
-jobFeed :: ATOM -> Handle -> Int-> IO ()
-jobFeed atom hdl n = do
-    ls <- bslines <$> BL.hGetContents hdl
-    let xs = filter isJust (map apache ls) ++ replicate n Nothing
-    mapM_ write xs
+jobFeed :: ATOM -> Handle -> Int -> IO ()
+jobFeed atom hdl n =
+    run_ $ enumList 64 (replicate n Nothing)
+        $$ (enumHandle hdl `joinE` EL.map apache `joinE` EL.filter isJust)
+        $$ iterFeed atom
+    
+iterFeed :: ATOM -> Iteratee (Maybe Log) IO ()
+iterFeed atom = do
+    mx <- EL.head
+    case mx of
+        Nothing -> return ()
+        Just x  -> liftIO (write x) >> iterFeed atom
   where
     jobq = jobQueue atom
     write x = atomically $ writeTChan jobq x
 
-bslines :: BL.ByteString -> [ByteString]
-bslines bs = case BL.break (== '\n') bs of
-    (bs',"")   -> toStrict bs' : []
-    (bs',rest) -> toStrict bs' : bslines (BL.tail rest)
-  where
-    toStrict = BS.concat . BL.toChunks
+enumHandle :: MonadIO m => Handle -> Enumerator ByteString m b
+enumHandle h = loop where
+        loop (Continue k) = do
+                maybeBytes <- tryIO getBytes
+                case maybeBytes of
+                        Nothing -> continue k
+                        Just text -> k (Chunks [text]) >>== loop
+        
+        loop step = returnI step
+        getBytes = Exc.catch
+                (Just `fmap` BS.hGetLine h)
+                (\err -> if isEOFError err
+                        then return Nothing
+                        else Exc.throwIO err)
 
+tryIO :: MonadIO m => IO b -> Iteratee a m b
+tryIO io = Iteratee $ do
+        tried <- liftIO (Exc.try io)
+        return $ case tried of
+                Right b -> Yield b (Chunks [])
+                Left err -> Error err
+
+infixr 0 =$
+
+(=$) :: Monad m => Enumeratee ao ai m b -> Iteratee ai m b -> Iteratee ao m b
+ee =$ ie = joinI $ ee $$ ie

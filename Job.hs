@@ -66,7 +66,7 @@ getter atom = do
     done = jobsDone atom
 
 jobFeed :: ATOM -> Handle -> Int-> IO ()
-jobFeed atom hdl n= do
+jobFeed atom hdl n = do
     ls <- bslines <$> BL.hGetContents hdl
     let xs = filter isJust (map apache ls) ++ replicate n Nothing
     mapM_ write xs

@@ -25,8 +25,7 @@ data ATOM = ATOM {
 newAtom :: Int -> FileLogSpec -> IO ATOM
 newAtom n logspec =
     ATOM <$> newTChanIO
---         <*> fileInit logspec
-         <*> stdoutInit
+         <*> fileInit logspec
          <*> newTVarIO 0
          <*> newTVarIO n
 

@@ -46,4 +46,4 @@ apacheLog = do
         skipWhile (/='"')
         char '"'
         return (m,p)
-    trailing = takeWhile1 (/='\n') *> endOfInput
+    trailing = many anyChar *> endOfInput

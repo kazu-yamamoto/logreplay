@@ -2,8 +2,7 @@
 
 module Report where
 
-import Control.Concurrent (forkIO, threadDelay)
-import Control.Concurrent.STM
+import Control.Concurrent
 import Control.Monad
 import qualified Data.ByteString.Char8 as BS
 import Data.ByteString.Lazy (ByteString)
@@ -39,19 +38,19 @@ fileCheck spec = do
     dir = takeDirectory file
     exit msg = hPutStrLn stderr msg >> exitFailure
 
-fileInit :: FileLogSpec -> IO (TChan ByteString)
+fileInit :: FileLogSpec -> IO (Chan ByteString)
 fileInit spec = do
     hdl <- open spec
-    tvar <- newTVarIO hdl
-    chan <- newTChanIO
-    forkIO $ fileFlusher tvar spec
-    forkIO $ fileSerializer chan tvar
+    mvar <- newMVar hdl
+    chan <- newChan
+    forkIO $ fileFlusher mvar spec
+    forkIO $ fileSerializer chan mvar
     return chan
 
-fileFlusher :: TVar Handle -> FileLogSpec -> IO ()
-fileFlusher tvar spec = forever $ do
+fileFlusher :: MVar Handle -> FileLogSpec -> IO ()
+fileFlusher mvar spec = forever $ do
     threadDelay $ log_flush_period spec
-    hdl <- readTVarIO tvar
+    hdl <- takeMVar mvar
     hFlush hdl
     size <- hFileSize hdl
     if size > log_file_size spec
@@ -59,15 +58,15 @@ fileFlusher tvar spec = forever $ do
         hClose hdl
         locate spec
         newhdl <- open spec
-        atomically $ writeTVar tvar newhdl
-       else atomically $ writeTVar tvar hdl
+        putMVar mvar newhdl
+       else putMVar mvar hdl
 
-fileSerializer :: TChan ByteString -> TVar Handle -> IO ()
-fileSerializer chan tvar = forever $ do
-    xs <- atomically $ readTChan chan
-    hdl <- readTVarIO tvar
+fileSerializer :: Chan ByteString -> MVar Handle -> IO ()
+fileSerializer chan mvar = forever $ do
+    xs <- readChan chan
+    hdl <- takeMVar mvar
     BL.hPut hdl xs
-    atomically $ writeTVar tvar hdl
+    putMVar mvar hdl
 
 open :: FileLogSpec -> IO Handle
 open spec = do
@@ -94,24 +93,24 @@ locate spec = mapM_ move srcdsts
 
 ----------------------------------------------------------------
 
-stdoutInit :: IO (TChan ByteString)
+stdoutInit :: IO (Chan ByteString)
 stdoutInit = do
-    chan <- newTChanIO
+    chan <- newChan
     forkIO $ stdoutSerializer chan
     return chan
 
-stdoutSerializer :: TChan ByteString -> IO ()
+stdoutSerializer :: Chan ByteString -> IO ()
 stdoutSerializer chan = forever $ do
-    xs <- atomically $ readTChan chan
+    xs <- readChan chan
     BL.putStr xs
 
 ----------------------------------------------------------------
 
-mightyLogger :: TChan ByteString -> Request -> Status -> IO ()
+mightyLogger :: Chan ByteString -> Request -> Status -> IO ()
 mightyLogger chan req st = do
     zt <- getZonedTime
     addr <- getPeerAddr (remoteHost req)
-    atomically $ writeTChan chan $ BL.fromChunks (logmsg addr zt)
+    writeChan chan $ BL.fromChunks (logmsg addr zt)
   where
     logmsg addr zt = [
         BS.pack addr

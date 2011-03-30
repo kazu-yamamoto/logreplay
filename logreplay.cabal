@@ -1,0 +1,29 @@
+Name:                   logreplay
+Version:                0.0.0
+Author:                 Kazu Yamamoto <kazu@iij.ad.jp>
+Maintainer:             Kazu Yamamoto <kazu@iij.ad.jp>
+License:                BSD3
+License-File:           LICENSE
+Synopsis:               A stress tool for web servers.
+Description:            A stress tool for web servers.
+Category:               Web
+Cabal-Version:          >= 1.6
+Build-Type:             Simple
+Flag threaded
+Executable logreplay
+  Main-Is:              Main.hs
+  if impl(ghc >= 6.12)
+    if flag(threaded)
+      GHC-Options:        -Wall -fno-warn-unused-do-bind -threaded
+    else
+      GHC-Options:        -Wall -fno-warn-unused-do-bind
+  else
+    GHC-Options:        -Wall
+  Build-Depends:        base >= 4.0 && < 5, transformers, 
+                        bytestring, attoparsec,
+                        enumerator >= 0.4.9, http-enumerator
+  Other-Modules:        Job
+                        ApacheLog
+Source-Repository head
+  Type:                 git
+  Location:             git://github.com/kazu-yamamoto/logreplay.git

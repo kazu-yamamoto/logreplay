@@ -33,8 +33,7 @@ reporter :: ATOM -> IO ()
 reporter atom = forever $ do
     threadDelay 1000000
     n <- readMVar (jobsDone atom)
-    m <- readMVar (activeWorkers atom)
-    putStrLn $ show n ++ " " ++ show m
+    putStrLn $ show n
 
 waitFor :: ATOM -> IO ()
 waitFor atom = do
@@ -55,12 +54,10 @@ getter atom n = do
                let n' = n + 1
                when (n' `mod` 10 == 0) $
                    modifyMVar_ done (return . (+10))
---               writeChan repq $ BL.pack $ show x ++ "\n"
                getter atom n'
            else getter atom n
   where
     jobq = jobQueue atom
---    repq = repQueue atom
     actv = activeWorkers atom
     done = jobsDone atom
 

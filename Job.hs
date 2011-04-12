@@ -50,7 +50,7 @@ getter atom n = do
        Just x -> if (logMethod x == "GET")
            then do
                req <- parseUrl $ "http://localhost" ++ BS.unpack (logPath x)
-               httpLbs req
+               withManager $ \mgr -> httpLbs req mgr
                let n' = n + 1
                when (n' `mod` 10 == 0) $
                    modifyMVar_ done (return . (+10))

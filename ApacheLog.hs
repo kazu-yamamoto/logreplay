@@ -2,7 +2,7 @@
 
 module ApacheLog where
 
-import Control.Applicative ((<$),(<*),(*>))
+import Control.Applicative ((<$),(<*),(*>),(<|>))
 import Data.Attoparsec.Char8
 import Data.ByteString (ByteString)
 
@@ -42,8 +42,12 @@ apacheLog = do
         char '"'
         m <- notSPCs
         skipSpc
-        p <- notSPCs
+        p <- path
         skipWhile (/='"')
         char '"'
         return (m,p)
+    path = do string "http://"
+              skipWhile (/='/')
+              notSPCs
+       <|> notSPCs
     trailing = many anyChar *> endOfInput
